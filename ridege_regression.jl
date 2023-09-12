@@ -1,6 +1,7 @@
 using CSV
 using LinearAlgebra
 using DataFrames
+using Plots
 
 # Load data
 url = "http://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv"
@@ -29,10 +30,15 @@ end
 
 
 lambdas = [0, 1e-3, 1e-2, 1e-1]
+errors = []
 
 for lambda in lambdas
     theta = ridge_regression(X_train, y_train, lambda)
     y_pred = X_test * theta
     mse = compute_mse(y_pred, y_test)
+    push!(errors, mse)
     println("MSE for lambda = $lambda: $mse")
 end
+
+plot(lambdas, errors, label="MSE", xlabel="lambda", ylabel="MSE", title="MSE vs lambda", marker=:circle, lw=2)
+savefig("error_vs_lambda.png")

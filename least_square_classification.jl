@@ -3,6 +3,7 @@
 using CSV
 using LinearAlgebra
 using DataFrames
+using Plots
 
 # Load data
 url = "https://archive.ics.uci.edu/ml/machine-learning-databases/ionosphere/ionosphere.data"
@@ -38,10 +39,15 @@ end
 
 
 lambdas = [0, 1e-3, 1e-2, 1e-1]
+accuracy_list = []
 
 for lambda in lambdas
     theta = ridge_regression(X_train, y_train, lambda)
     y_pred = sign.(X_test * theta)
     accuracy = compute_accuracy(y_pred, y_test)
+    push!(accuracy_list, accuracy)
     println("Prediction accuracy for lambda = $lambda: $accuracy")
 end
+
+plot(lambdas, accuracy_list, label="accuracy", xlabel="lambda", ylabel="accuracy", title="accuracy vs lambda", marker=:circle, lw=2)
+savefig("accuracy_vs_lambda.png")
