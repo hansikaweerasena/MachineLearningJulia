@@ -1,0 +1,125 @@
+using Statistics
+
+
+function create_matrix_from_file(filename)  
+# First pass: Determine the matrix dimensions
+    max_doc_id, max_word_id = 0, 0
+    open(filename, "r") do f
+        for line in eachline(f)
+            doc_id, word_id, _ = split(line)
+            max_doc_id = max(max_doc_id, parse(Int, doc_id))
+            max_word_id = max(max_word_id, parse(Int, word_id))
+        end
+    end
+
+    # Initialize a matrix of zeros
+    matrix = zeros(Int, max_doc_id, max_word_id)
+
+    # Second pass: Fill the matrix directly
+    open(filename, "r") do f
+        for line in eachline(f)
+            doc_id, word_id, freq = split(line)
+            matrix[parse(Int, doc_id), parse(Int, word_id)] = parse(Int, freq)
+        end
+    end
+
+    return matrix
+end
+
+
+function read_labels_from_file(filename)
+    labels = Int[] 
+    open(filename, "r") do f
+        for line in eachline(f)
+            push!(labels, parse(Int, strip(line))) 
+        end
+    end
+    return labels
+end
+
+
+function prune_dataset(matrix, min_frequency)
+    col_sums = sum(matrix, dims=1)
+    mask = (col_sums .> min_frequency)[:]
+    pruned_matrix = matrix[:, mask]
+    return pruned_matrix, mask
+end
+
+
+function tfidf(X)
+    N = size(X, 1)
+    row_sums = sum(X, dims=2)
+    tf = ifelse.(row_sums .== 0, 0, X ./ row_sums)
+    df = sum(X .> 0, dims=1)
+    idf = log.(N ./ (df .+ 1))
+    tfidf_matrix = tf .* idf
+    return tfidf_matrix
+end
+
+
+
+# Estimate parameters
+function estimate_parameters(X_train, y_train, n_classes)
+    mues = [mean(X_train[y_train .== c, :], dims=1) for c in 1:n_classes]
+    X_train = X_train .+ 1e-5
+    sigma = cov(X_train)
+    inv_sigma = inv(sigma)
+    priors = [sum(y_train .== c) / length(y_train) for c in 1:n_classes]
+    betas = [-0.5 * (mu * inv_sigma * mu')[1] + log(prior) for (mu, prior) in zip(mues, priors)]
+    return mues, inv_sigma, betas
+end
+
+
+# LDA Classifier
+function predict_LDA(X_test, mues, inv_sigma, betas)
+    predictions = []
+    for x in eachrow(X_test)
+        scores = [(mu * inv_sigma * x)[1] + beta for (mu, beta) in zip(mues, betas)]
+        push!(predictions, argmax(scores))
+    end    
+    return predictions
+end
+
+
+
+X_train = create_matrix_from_file("./matlab/train.data")
+X_test = create_matrix_from_file("./matlab/test.data")
+println(size(X_train))
+println(size(X_test))
+
+X_train_pruned, mask = prune_dataset(X_train, 1000)
+println(size(X_train_pruned))
+
+# Get the number of columns in X_test
+num_columns = size(X_test, 2)
+
+# Extend the mask to match the number of columns
+extended_mask = falses(num_columns)
+extended_mask[1:length(mask)] .= mask
+
+# Now, use the extended mask to prune X_test
+X_test_pruned = X_test[:, extended_mask]
+
+println(size(X_test_pruned))
+
+
+X_train_tfidf = tfidf(X_train_pruned)
+X_test_tfidf = tfidf(X_test_pruned)
+
+
+y_train = read_labels_from_file("./matlab/train.label")
+println(size(y_train))
+
+y_test = read_labels_from_file("./matlab/test.label")
+println(size(y_test))
+
+# Estimating parameters
+mues, inv_sigma, betas = estimate_parameters(X_train_tfidf, y_train, 20)
+println("parameter estimation done")
+
+# Classify test data
+y_pred = predict_LDA(X_test_tfidf, mues, inv_sigma, betas)
+
+# Evaluate accuracy
+accuracy = sum(y_pred .== y_test) / length(y_test)
+println("Accuracy: ", accuracy)

@@ -1,0 +1,126 @@
+function create_matrix_from_file(filename)  
+# First pass: Determine the matrix dimensions
+    max_doc_id, max_word_id = 0, 0
+    open(filename, "r") do f
+        for line in eachline(f)
+            doc_id, word_id, _ = split(line)
+            max_doc_id = max(max_doc_id, parse(Int, doc_id))
+            max_word_id = max(max_word_id, parse(Int, word_id))
+        end
+    end
+
+    # Initialize a matrix of zeros
+    matrix = zeros(Int, max_doc_id, max_word_id)
+
+    # Second pass: Fill the matrix directly
+    open(filename, "r") do f
+        for line in eachline(f)
+            doc_id, word_id, freq = split(line)
+            matrix[parse(Int, doc_id), parse(Int, word_id)] = parse(Int, freq)
+        end
+    end
+
+    return matrix
+end
+
+
+function read_labels_from_file(filename)
+    labels = Int[]  # Initialize an empty array of integers
+    open(filename, "r") do f
+        for line in eachline(f)
+            push!(labels, parse(Int, strip(line)))  # Parse each line as an integer and append to the labels array
+        end
+    end
+    return labels
+end
+
+
+function prune_dataset(matrix, min_frequency)
+    # Step 1: Compute column sums
+    col_sums = sum(matrix, dims=1)
+    mask = (col_sums .> min_frequency)[:]
+    pruned_matrix = matrix[:, mask]
+    return pruned_matrix, mask
+end
+
+
+# Estimate parameters
+function estimate_parameters(X_train, y_train)
+    num_classes = maximum(y_train)
+    word_probs = []
+    class_priors = []
+
+    for c in 1:num_classes
+        class_docs = X_train[y_train .== c, :]
+        total_words_in_class = sum(class_docs)
+        
+        # Laplace smoothing applied for estimating word probabilities
+        word_prob = (sum(class_docs, dims=1) .+ 1) ./ (total_words_in_class)
+        push!(word_probs, log.(word_prob))
+        
+        class_prior = size(class_docs, 1) / size(X_train, 1)
+        push!(class_priors, log(class_prior))
+    end
+
+    return word_probs, class_priors
+end
+
+
+# Naive Bayes classifier
+function classify_nb(X, word_probs, class_priors)
+    num_classes = length(class_priors)
+    num_docs = size(X, 1)
+    
+    # Initialize an empty matrix to store the scores
+    scores_matrix = zeros(num_docs, num_classes)
+    
+    for c in 1:num_classes
+        scores_matrix[:, c] .= X * word_probs[c]' .+ class_priors[c]
+    end
+    
+    # Determine the class with the maximum score for each instance
+    predictions_indices = argmax(scores_matrix, dims=2)
+    predictions = [index[2] for index in predictions_indices]
+    
+    return predictions
+end
+
+
+
+X_train = create_matrix_from_file("./matlab/train.data")
+X_test = create_matrix_from_file("./matlab/test.data")
+println(size(X_train))
+println(size(X_test))
+
+X_train_pruned, mask = prune_dataset(X_train, 1000)
+println(size(X_train_pruned))
+
+# Get the number of columns in X_test
+num_columns = size(X_test, 2)
+
+# Extend the mask to match the number of columns
+extended_mask = falses(num_columns)
+extended_mask[1:length(mask)] .= mask
+
+# Now, use the extended mask to prune X_test
+X_test_pruned = X_test[:, extended_mask]
+
+println(size(X_test_pruned))
+
+# Example usage:
+y_train = read_labels_from_file("./matlab/train.label")
+println(size(y_train))
+
+y_test = read_labels_from_file("./matlab/test.label")
+println(size(y_test))
+
+# Estimating parameters
+word_probs, class_priors = estimate_parameters(X_train_pruned, y_train)
+
+
+# Classify test data
+y_pred = classify_nb(X_test_pruned, word_probs, class_priors)
+
+# Evaluate accuracy
+accuracy = sum(y_pred .== y_test) / length(y_test)
+println("Accuracy: ", accuracy)

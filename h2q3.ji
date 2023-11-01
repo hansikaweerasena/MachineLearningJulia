@@ -1,0 +1,100 @@
+using LinearAlgebra
+using Plots
+
+function create_matrix_from_file(filename)  
+# First pass: Determine the matrix dimensions
+    max_doc_id, max_word_id = 0, 0
+    open(filename, "r") do f
+        for line in eachline(f)
+            doc_id, word_id, _ = split(line)
+            max_doc_id = max(max_doc_id, parse(Int, doc_id))
+            max_word_id = max(max_word_id, parse(Int, word_id))
+        end
+    end
+
+    # Initialize a matrix of zeros
+    matrix = zeros(Int, max_doc_id, max_word_id)
+
+    # Second pass: Fill the matrix directly
+    open(filename, "r") do f
+        for line in eachline(f)
+            doc_id, word_id, freq = split(line)
+            matrix[parse(Int, doc_id), parse(Int, word_id)] = parse(Int, freq)
+        end
+    end
+
+    return matrix
+end
+
+
+function read_labels_from_file(filename)
+    labels = Int[] 
+    open(filename, "r") do f
+        for line in eachline(f)
+            push!(labels, parse(Int, strip(line))) 
+        end
+    end
+    return labels
+end
+
+
+function prune_dataset(matrix, min_frequency)
+    col_sums = sum(matrix, dims=1)
+    mask = (col_sums .> min_frequency)[:]
+    pruned_matrix = matrix[:, mask]
+    return pruned_matrix, mask
+end
+
+
+function tfidf(X)
+    N = size(X, 1)
+    row_sums = sum(X, dims=2)
+    tf = ifelse.(row_sums .== 0, 0, X ./ row_sums)
+    df = sum(X .> 0, dims=1)
+    idf = log.(N ./ (df .+ 1))
+    tfidf_matrix = tf .* idf
+    return tfidf_matrix
+end
+
+
+function orthogonal_iteration(phi, k)
+    m, n = size(phi)
+    theta = randn(m, k)
+    
+    for t in 1:1000
+        theta_next = phi * phi' * theta
+        Q, R = qr(theta_next)
+        Q_new = Q[:, 1:k]
+        
+        if norm(Q_new - theta) < 1e-10
+            println("Converged at iteration $t")
+            break
+        end
+
+        theta = Q_new    
+    end
+    
+    return theta
+end
+
+
+
+X_train = create_matrix_from_file("./matlab/train.data")
+X_train_pruned, mask = prune_dataset(X_train, 1000)
+X_train_tfidf = tfidf(X_train_pruned)
+
+
+k = 2
+theta = orthogonal_iteration(X_train_tfidf', k)
+
+
+Y = theta' * X_train_tfidf'
+
+labels = read_labels_from_file("./matlab/train.label")
+    
+scatter(Y[1, :], Y[2, :], color=labels, legend=false,
+    xlabel="PCA 1", ylabel="PCA 2", title="20 Newsgroups 2D PCA")
+
+savefig("pca.png")
+
+
