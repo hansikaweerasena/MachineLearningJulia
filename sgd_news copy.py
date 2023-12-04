@@ -71,7 +71,7 @@ Y_test = label_encoder.transform(newsgroups_test.target)
 # Parameters
 k = np.unique(Y_train).size  # The number of unique labels
 lambdas_ = [10, 1, 0.1, 0.01]  # Regularization parameter
-max_iter = 1000000  # Number of iterations for the SGD algorithm
+max_iter = 1000  # Number of iterations for the SGD algorithm
 eval_interval = 1000  # Evaluate every 1000 iterations
 
 for lambda_ in lambdas_:
