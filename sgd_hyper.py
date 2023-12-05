@@ -75,6 +75,11 @@ lambdas_ = [10, 1]  # Regularization parameter
 max_iter = 1000000  # Number of iterations for the SGD algorithm
 eval_interval = 1000  # Evaluate every 1000 iterations
 
+
+file_path = './sgd_news_all_test.txt'
+with open(file_path, 'w') as file:
+        file.write("test write") 
+
 for lambda_ in lambdas_:
     # Run the algorithm
     print(f"Running for lambda: {lambda_}")
