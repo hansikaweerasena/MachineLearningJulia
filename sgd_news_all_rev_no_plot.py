@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import numpy as np
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import CountVectorizer
